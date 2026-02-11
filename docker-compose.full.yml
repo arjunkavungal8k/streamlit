@@ -1,0 +1,72 @@
+version: '3.8'
+
+services:
+  # Streamlit Application
+  streamlit:
+    build: .
+    container_name: streamlit-n8n
+    ports:
+      - "8501:8501"
+    environment:
+      - N8N_URL=http://n8n:5678
+      - N8N_API_KEY=${N8N_API_KEY:-}
+    depends_on:
+      - n8n
+    volumes:
+      - ./app.py:/app/app.py:ro
+    networks:
+      - n8n_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8501/_stcore/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # n8n Workflow Automation
+  n8n:
+    image: n8nio/n8n
+    container_name: n8n-workflow
+    ports:
+      - "5678:5678"
+    environment:
+      - N8N_HOST=${N8N_HOST:-0.0.0.0}
+      - N8N_PORT=${N8N_PORT:-5678}
+      - N8N_PROTOCOL=${N8N_PROTOCOL:-http}
+      - WEBHOOK_URL=${WEBHOOK_URL:-http://localhost:5678}
+      - NODE_TLS_REJECT_UNAUTHORIZED=0
+      - DB_TYPE=${DB_TYPE:-sqlite}
+    volumes:
+      - n8n-data:/home/node/.n8n
+    networks:
+      - n8n_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:5678/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # PostgreSQL database for n8n (optional, uncomment to use)
+  # postgres:
+  #   image: postgres:15-alpine
+  #   container_name: n8n-postgres
+  #   environment:
+  #     POSTGRES_DB: ${DB_NAME:-n8n}
+  #     POSTGRES_USER: ${DB_USER:-n8n}
+  #     POSTGRES_PASSWORD: ${DB_PASSWORD:-n8n_password}
+  #   volumes:
+  #     - postgres-data:/var/lib/postgresql/data
+  #   networks:
+  #     - n8n_network
+  #   restart: unless-stopped
+
+volumes:
+  n8n-data:
+  # postgres-data:
+
+networks:
+  n8n_network:
+    driver: bridge
